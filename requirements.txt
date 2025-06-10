@@ -5,7 +5,6 @@ scikit-learn
 google-api-python-client
 requests
 numpy
-datetime
 python-dotenv
 xgboost
 google-generativeai
