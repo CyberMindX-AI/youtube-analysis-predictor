@@ -8,3 +8,5 @@ numpy
 datetime
 python-dotenv
 xgboost
+google-generativeai
+
