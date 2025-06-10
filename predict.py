@@ -17,9 +17,68 @@ YOUTUBE_API_KEY= os.getenv("YOUTUBE_API_KEY")
 youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
 
 # === Extract video ID from URL ===
-def get_video_id(youtube_url):
-    match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", youtube_url)
+
+def get_video_id(url):
+    """Extract video ID from YouTube URL"""
+    pattern = r'(?:v=|\/)([0-9A-Za-z_-]{11}).*'
+    match = re.search(pattern, url)
     return match.group(1) if match else None
+
+def fetch_video_data(video_id):
+    """Fetch video data from YouTube API"""
+    if not YOUTUBE_API_KEY:
+        print("❌ YOUTUBE_API_KEY not found in environment variables")
+        return None
+    
+    try:
+        # YouTube Data API endpoint
+        url = f"https://www.googleapis.com/youtube/v3/videos"
+        params = {
+            'part': 'snippet,statistics,contentDetails',
+            'id': video_id,
+            'key': YOUTUBE_API_KEY
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        if not data.get('items'):
+            print(f"❌ No video found with ID: {video_id}")
+            return None
+        
+        video = data['items'][0]
+        snippet = video['snippet']
+        statistics = video['statistics']
+        content_details = video['contentDetails']
+        
+        # Calculate days since published
+        published_at = datetime.fromisoformat(snippet['publishedAt'].replace('Z', '+00:00'))
+        days_since_published = (datetime.now(published_at.tzinfo) - published_at).days
+        
+        video_data = {
+            'title': snippet.get('title', ''),
+            'description': snippet.get('description', ''),
+            'tags': snippet.get('tags', []),
+            'categoryId': snippet.get('categoryId', ''),
+            'publishedAt': snippet.get('publishedAt', ''),
+            'duration': content_details.get('duration', 'PT0S'),
+            'viewCount': int(statistics.get('viewCount', 0)),
+            'likeCount': int(statistics.get('likeCount', 0)),
+            'commentCount': int(statistics.get('commentCount', 0)),
+            'thumbnail': snippet['thumbnails']['high']['url'],
+            'days': days_since_published
+        }
+        
+        return video_data
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ API request failed: {e}")
+        return None
+    except Exception as e:
+        print(f"❌ Error fetching video data: {e}")
+        return None
 
 # === Convert ISO 8601 duration to seconds ===
 def convert_duration_to_seconds(duration):
@@ -28,52 +87,6 @@ def convert_duration_to_seconds(duration):
     minutes = int(match.group(2)) if match and match.group(2) else 0
     seconds = int(match.group(3)) if match and match.group(3) else 0
     return hours * 3600 + minutes * 60 + seconds
-
-# === Fetch data from API ===
-def fetch_video_data(video_id):
-    api_url = "https://www.googleapis.com/youtube/v3/videos"
-    params = {
-        "part": "snippet,contentDetails,statistics",
-        "id": video_id,
-        "key": YOUTUBE_API_KEY
-    }
-    response = requests.get(api_url, params=params)
-
-    if response.status_code != 200:
-        print(f'Error fetching data for video ID {video_id}: {response.status_code}')
-        return None
-
-    data = response.json()
-    if 'items' not in data or not data['items']:
-        print(f'No data found for video ID {video_id}')
-        return None
-
-    item = data["items"][0]
-    snippet = item.get("snippet", {})
-    stats = item.get("statistics", {})
-    details = item.get("contentDetails", {})
-
-    # Calculate days since published
-    published_at = snippet.get("publishedAt", "")
-    published_time = datetime.strptime(published_at, "%Y-%m-%dT%H:%M:%SZ")
-    now = datetime.now(timezone.utc)
-    days = max((now - published_time.replace(tzinfo=timezone.utc)).days, 1)
-
-    return {
-        "title": snippet.get("title", ""),
-        "description": snippet.get("description", "").replace('\n', ' ').replace('\r', ' '),
-        "tags": ','.join(snippet.get("tags", [])),
-        "publishedAt": published_at,
-        "categoryId": int(snippet.get("categoryId", 0)),
-        "viewCount": int(stats.get("viewCount", 0)),
-        "likeCount": int(stats.get("likeCount", 0)),
-        "commentCount": int(stats.get("commentCount", 0)),
-        "duration": details.get("duration", ""),
-        "thumbnail": snippet.get("thumbnails", {}).get("medium", {}).get("url", ""),
-        "video_url": f"https://www.youtube.com/watch?v={video_id}",
-        "days": days  # for model input
-    }
-
 # === Predict views and likes ===
 def predict_views_and_likes(video_data):
     duration_seconds = convert_duration_to_seconds(video_data['duration'])
