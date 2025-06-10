@@ -13,8 +13,8 @@ model_likes = joblib.load("like_count_predictor_model.pkl")
 model_views = joblib.load("view_count_predictor_model.pkl")
 
 # Setup YouTube API
-apikey = os.getenv("YOUTUBE_API_KEY")
-youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=apikey)
+YOUTUBE_API_KEY= os.getenv("YOUTUBE_API_KEY")
+youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
 
 # === Extract video ID from URL ===
 def get_video_id(youtube_url):
@@ -35,7 +35,7 @@ def fetch_video_data(video_id):
     params = {
         "part": "snippet,contentDetails,statistics",
         "id": video_id,
-        "key": apikey
+        "key": YOUTUBE_API_KEY
     }
     response = requests.get(api_url, params=params)
 
